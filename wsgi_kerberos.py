@@ -10,11 +10,25 @@ LOG.addHandler(logging.NullHandler())
 class KerberosAuthMiddleware(object):
     """WSGI Middleware providing Kerberos Authentication"""
 
-    def __init__(self, application, hostname=None):
+    def __init__(self, app, hostname=None, unauthorized=None, forbidden=None):
         if hostname is None:
             hostname = socket.gethostname()
-        self.application = application       # WSGI Application
-        self.service = "HTTP@%s" % hostname  # GSS Service hostname
+
+        if unauthorized is None:
+            unauthorized = ("Unauthorized", 'text/plain')
+        elif isinstance(unauthorized, basestring):
+            unauthorized = (unauthorized, 'text/plain')
+
+        if forbidden is None:
+            forbidden = ("Forbidden", 'text/plain')
+        elif isinstance(forbidden, basestring):
+            forbidden = (forbidden, 'text/plain')
+
+
+        self.application = app               # WSGI Application
+        self.service = "HTTP@%s" % hostname  # GSS Service
+        self.unauthorized = unauthorized     # 401 response text/content-type
+        self.forbidden = forbidden           # 403 response text/content-type
 
         if 'KRB5_KTNAME' in os.environ:
             try:
@@ -22,23 +36,26 @@ class KerberosAuthMiddleware(object):
                                                                hostname)
             except kerberos.KrbError as exc:
                 LOG.warn("KerberosAuthMiddleware: %s" % exc.message[0])
+            else:
+                LOG.debug("KerberosAuthMiddleware is identifying as %s" %
+                          principal)
         else:
             LOG.warn("KerberosAuthMiddleware: set KRB5_KTNAME to your keytab "
                      "file")
 
     def _unauthorized(self, start_response, token=None):
-        headers = [('content-type', 'text/plain')]
+        headers = [('content-type', self.unauthorized[1])]
         if token:
             headers.append(('WWW-Authenticate', token))
         else:
             headers.append( ('WWW-Authenticate', 'Negotiate'))
         start_response('401 Unauthorized', headers)
-        return ['Unauthorized',]
+        return [self.unauthorized[0]]
 
     def _forbidden(self, start_response, token):
-        headers = [('content-type', 'text/plain')]
+        headers = [('content-type', self.forbidden[1])]
         start_response('403 Forbidden', headers)
-        return ['Forbidden',]
+        return [self.forbidden[0]]
 
     def _authenticate(self, client_token):
         state = None

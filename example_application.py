@@ -10,7 +10,7 @@ if __name__ == '__main__':
     from wsgi_kerberos import KerberosAuthMiddleware
     from socket import gethostname
     import logging
-    logging.basicConfig()
+    logging.basicConfig(level=logging.DEBUG)
     application = KerberosAuthMiddleware(example)
     server = make_server(gethostname(), 8080, application)
     server.serve_forever()
