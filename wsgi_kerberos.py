@@ -73,7 +73,7 @@ class KerberosAuthMiddleware(object):
         start_response('401 Unauthorized', headers)
         return [self.unauthorized[0]]
 
-    def _forbidden(self, start_response, token):
+    def _forbidden(self, start_response):
         '''
         Send a 403 Forbidden response
         '''
