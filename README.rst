@@ -35,9 +35,10 @@ your keytab set the environment variable ``KRB5_KTNAME`` in your shell to the
 location of the keytab file.
 
 After that, it should be as easy as passing your application to the
-KerberosAuthMiddleware constructor.  All requests destined for the application
-will first be authenticated by the middleware, and the authenticated users
-principal will be available as the REMOTE_USER in the WSGI environment.
+``KerberosAuthMiddleware`` constructor.  All requests destined for the
+application will first be authenticated by the middleware, and the authenticated
+users principal will be available as the ``REMOTE_USER`` in the WSGI
+environment.
 
 For example::
 
@@ -56,7 +57,8 @@ For example::
 
 ``WSGI-Kerberos`` assumes that the service will be running using the hostname of
 the host on which the application is run. If this is not the case, you can
-override it by passing in a hostname to the KerberosAuthMiddleware constructor::
+override it by passing in a hostname to the ``KerberosAuthMiddleware``
+constructor::
 
     from wsgiref.simple_server import make_server
     from wsgi_kerberos import KerberosAuthMiddleware
@@ -71,13 +73,13 @@ override it by passing in a hostname to the KerberosAuthMiddleware constructor::
         http.serve_forever()
 
 
-By default, when ``WSGI-Kerberos`` responds with a 401 message to indicate that
-authentication is required, it generates a very simple page with a content-type
-of text/plain that includes the string ``Unauthorized``.
+By default, when ``WSGI-Kerberos`` responds with a ``401`` to indicate that
+authentication is required, it generates a very simple page with a
+``Content-Type`` of ``text/plain`` that includes the string ``Unauthorized``.
 
-Similarly, when it responds with a 403 message indicating that authentication
-has failed, it generates another simple page with a content-type of text/plain
-that includes the string ``Forbidden``.
+Similarly, when it responds with a ``403`` indicating that authentication has
+failed, it generates another simple page with a ``Content-Type`` of
+``text/plain`` that includes the string ``Forbidden``.
 
 These can be customized::
 
@@ -95,7 +97,8 @@ These can be customized::
         http = make_server('', 80, app)
         http.serve_forever()
 
-You can also change the content-types by passing in string/content-type tuples::
+You can also change the ``Content-Types`` by passing in string/content-type
+tuples::
 
     from wsgi_kerberos import KerberosAuthMiddleware
     from wsgiref.simple_server import make_server
@@ -143,9 +146,9 @@ If credentials are presented in the ``Authorization`` header, the credentials
 will be validated, the principal of the authenticating user will be extracted
 and added to the WSGI environment using the key ``REMOTE_USER``, and the
 application will be called to serve the request, but instead of being passed the
-start_response method, it will be passed a slightly modified one which appends a
-``WWW-Authenticate`` header which identifies the server to the client.  This
-allows ``WSGI-Kerberos`` to support mutual authentication.
+default WSGI ``start_response`` function, it will be passed a slightly modified
+one which appends a ``WWW-Authenticate`` header which identifies the server to
+the client.  This allows ``WSGI-Kerberos`` to support mutual authentication.
 
 
 Full Example
