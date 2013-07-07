@@ -155,7 +155,7 @@ Full Example
 ------------
 
 To see a simple example, you can download the code `from github
-<http://github.com/mkomitee/flask-kerberos>`_. It is in the example directory.
+<http://github.com/mkomitee/wsgi-kerberos>`_. It is in the example directory.
 
 Changes
 -------
