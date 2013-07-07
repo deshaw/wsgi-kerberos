@@ -1,3 +1,8 @@
+'''
+WSGI Kerberos Authentication Middleware
+
+Add Kerberos/GSSAPI Negotiate Authentication support to any WSGI Application
+'''
 import kerberos
 import logging
 import os
@@ -8,25 +13,38 @@ LOG.addHandler(logging.NullHandler())
 
 
 class KerberosAuthMiddleware(object):
-    """WSGI Middleware providing Kerberos Authentication"""
+    '''
+    WSGI Middleware providing Kerberos Authentication
+
+    If no hostname is provided, the name returned by socket.gethostname() will
+    be used.
+
+    :param app: WSGI Application
+    :param hostname: Hostname for kerberos name canonicalization
+    :type hostname: str
+    :param unauthorized: 401 Response text or text/content-type tuple
+    :type unauthorized: str or tuple
+    :param forbidden: 403 Response text or text/content-type tuple
+    :type forbidden: str or tuple
+    '''
 
     def __init__(self, app, hostname=None, unauthorized=None, forbidden=None):
         if hostname is None:
             hostname = socket.gethostname()
 
         if unauthorized is None:
-            unauthorized = ("Unauthorized", 'text/plain')
+            unauthorized = ('Unauthorized', 'text/plain')
         elif isinstance(unauthorized, basestring):
             unauthorized = (unauthorized, 'text/plain')
 
         if forbidden is None:
-            forbidden = ("Forbidden", 'text/plain')
+            forbidden = ('Forbidden', 'text/plain')
         elif isinstance(forbidden, basestring):
             forbidden = (forbidden, 'text/plain')
 
 
         self.application = app               # WSGI Application
-        self.service = "HTTP@%s" % hostname  # GSS Service
+        self.service = 'HTTP@%s' % hostname  # GSS Service
         self.unauthorized = unauthorized     # 401 response text/content-type
         self.forbidden = forbidden           # 403 response text/content-type
 
@@ -35,15 +53,18 @@ class KerberosAuthMiddleware(object):
                 principal = kerberos.getServerPrincipalDetails('HTTP',
                                                                hostname)
             except kerberos.KrbError as exc:
-                LOG.warn("KerberosAuthMiddleware: %s" % exc.message[0])
+                LOG.warn('KerberosAuthMiddleware: %s' % exc.message[0])
             else:
-                LOG.debug("KerberosAuthMiddleware is identifying as %s" %
+                LOG.debug('KerberosAuthMiddleware is identifying as %s' %
                           principal)
         else:
-            LOG.warn("KerberosAuthMiddleware: set KRB5_KTNAME to your keytab "
-                     "file")
+            LOG.warn('KerberosAuthMiddleware: set KRB5_KTNAME to your keytab '
+                     'file')
 
     def _unauthorized(self, start_response, token=None):
+        '''
+        Send a 401 Unauthorized response
+        '''
         headers = [('content-type', self.unauthorized[1])]
         if token:
             headers.append(('WWW-Authenticate', token))
@@ -53,11 +74,20 @@ class KerberosAuthMiddleware(object):
         return [self.unauthorized[0]]
 
     def _forbidden(self, start_response, token):
+        '''
+        Send a 403 Forbidden response
+        '''
         headers = [('content-type', self.forbidden[1])]
         start_response('403 Forbidden', headers)
         return [self.forbidden[0]]
 
     def _authenticate(self, client_token):
+        '''
+        Validate the client token
+
+        Return the authenticated users principal and a token suitable to
+        provide mutual authentication to the client.
+        '''
         state = None
         server_token = None
         user = None
@@ -78,12 +108,17 @@ class KerberosAuthMiddleware(object):
         return server_token, user
 
     def __call__(self, environ, start_response):
+        '''
+        Authenticate the client, and on success invoke the WSGI application.
+        Include a token in the response headers that can be used to
+        authenticate the server to the client.
+        '''
         authorization = environ.get('HTTP_AUTHORIZATION')
-        # If we have no "Authorization" header, return a 401.
+        # If we have no 'Authorization' header, return a 401.
         if authorization is None:
             return self._unauthorized(start_response)
 
-        # If we have an "Authorization" header, extract the client's token and
+        # If we have an 'Authorization' header, extract the client's token and
         # attempt to authenticate with it.
         client_token = ''.join(authorization.split()[1:])
         server_token, user = self._authenticate(client_token)
