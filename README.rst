@@ -72,6 +72,27 @@ constructor::
         http = make_server('', 80, app)
         http.serve_forever()
 
+``WSGI-Kerberos`` assumes that every request should be authenticated. If this is
+not the case, you can override it by passing in a callback named to the
+``KerberosAuthMiddleware`` constructor. This callback will be called for every
+request and passed the wsgi environment object::
+
+    from wsgiref.simple_server import make_server
+    from wsgi_kerberos import KerberosAuthMiddleware
+
+    def example(environ, start_response):
+        start_response('200 OK', [('Content-Type', 'text/plain')])
+        return ['Hello, %s' % environ.get('REMOTE_USER', 'ANONYMOUS')]
+
+    def authenticate(environ):
+        return environ['PATH_INFO'].startswith('/protected'):
+
+    if __name__ == '__main__':
+        app = KerberosAuthMiddleware(example,
+                                     auth_required_callback=authenticate)
+        http = make_server('', 80, app)
+        http.serve_forever()
+
 
 By default, when ``WSGI-Kerberos`` responds with a ``401`` to indicate that
 authentication is required, it generates a very simple page with a

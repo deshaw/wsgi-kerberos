@@ -6,10 +6,38 @@ import unittest
 
 def index(environ, start_response):
     start_response('200 OK', [('Content-Type', 'text/plain')])
-    return ['Hello %s' % environ['REMOTE_USER']]
+    return ['Hello %s' % environ.get('REMOTE_USER', 'ANONYMOUS')]
 
 
 class BasicAppTestCase(unittest.TestCase):
+    @mock.patch('kerberos.authGSSServerInit')
+    @mock.patch('kerberos.authGSSServerStep')
+    @mock.patch('kerberos.authGSSServerResponse')
+    @mock.patch('kerberos.authGSSServerUserName')
+    @mock.patch('kerberos.authGSSServerClean')
+    def test_authentication_not_required(self, clean, name, response, step, init):
+        '''
+        Ensure that when a users auth_required_callback returns False,
+        authentication is not performed.
+
+        '''
+        false = lambda x: False
+        app = TestApp(KerberosAuthMiddleware(index,
+                                             hostname='example.org',
+                                             auth_required_callback=false))
+        r = app.get('/', expect_errors=False)
+        self.assertEqual(r.status, '200 OK')
+        self.assertEqual(r.status_int, 200)
+        self.assertEqual(r.body, 'Hello ANONYMOUS')
+        self.assertEqual(r.headers.get('WWW-Authenticate'), None)
+        self.assertEqual(r.headers['content-type'], 'text/plain')
+
+        self.assertEqual(init.mock_calls, [])
+        self.assertEqual(step.mock_calls, [])
+        self.assertEqual(name.mock_calls, [])
+        self.assertEqual(response.mock_calls, [])
+        self.assertEqual(clean.mock_calls, [])
+
     def test_unauthorized(self):
         '''
         Ensure that when the client does not send an authorization token, they

@@ -28,7 +28,8 @@ class KerberosAuthMiddleware(object):
     :type forbidden: str or tuple
     '''
 
-    def __init__(self, app, hostname=None, unauthorized=None, forbidden=None):
+    def __init__(self, app, hostname=None, unauthorized=None, forbidden=None,
+                 auth_required_callback=None):
         if hostname is None:
             hostname = socket.gethostname()
 
@@ -42,11 +43,14 @@ class KerberosAuthMiddleware(object):
         elif isinstance(forbidden, basestring):
             forbidden = (forbidden, 'text/plain')
 
+        if auth_required_callback is None:
+            auth_required_callback = lambda x: True
 
         self.application = app               # WSGI Application
         self.service = 'HTTP@%s' % hostname  # GSS Service
         self.unauthorized = unauthorized     # 401 response text/content-type
         self.forbidden = forbidden           # 403 response text/content-type
+        self.auth_required_callback = auth_required_callback
 
         if 'KRB5_KTNAME' in os.environ:
             try:
@@ -113,6 +117,11 @@ class KerberosAuthMiddleware(object):
         Include a token in the response headers that can be used to
         authenticate the server to the client.
         '''
+        # If we don't need to authenticate the request, shortcut the whole
+        # process.
+        if not self.auth_required_callback(environ):
+            return self.application(environ, start_response)
+
         authorization = environ.get('HTTP_AUTHORIZATION')
         # If we have no 'Authorization' header, return a 401.
         if authorization is None:
