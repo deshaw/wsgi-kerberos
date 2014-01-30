@@ -140,7 +140,8 @@ class KerberosAuthMiddleware(object):
             # it
             environ['REMOTE_USER'] = user
             def custom_start_response(status, headers, exc_info=None):
-                headers.append(('WWW-Authenticate', server_token))
+                headers.append(('WWW-Authenticate', ' '.join(['negotiate',
+                                                              server_token])))
                 return start_response(status, headers, exc_info)
             return self.application(environ, custom_start_response)
         elif server_token:

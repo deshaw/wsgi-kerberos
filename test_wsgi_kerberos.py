@@ -119,7 +119,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.status, '200 OK')
         self.assertEqual(r.status_int, 200)
         self.assertEqual(r.body, 'Hello user@EXAMPLE.ORG')
-        self.assertEqual(r.headers['WWW-Authenticate'], 'STOKEN')
+        self.assertEqual(r.headers['WWW-Authenticate'], 'negotiate STOKEN')
         self.assertEqual(r.headers['content-type'], 'text/plain')
 
         self.assertEqual(init.mock_calls, [mock.call('HTTP@example.org')])
