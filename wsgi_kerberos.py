@@ -12,6 +12,45 @@ LOG = logging.getLogger(__name__)
 LOG.addHandler(logging.NullHandler())
 
 
+def _consume_request(environ):
+    '''
+    Consume and discard all of the data on the request.
+
+    This avoids problems that some clients have when they get an unexpected
+    and premature close from the server.
+
+    RFC2616: If an origin server receives a request that does not include an
+    Expect request-header field with the "100-continue" expectation, the
+    request includes a request body, and the server responds with a final
+    status code before reading the entire request body from the transport
+    connection, then the server SHOULD NOT CLOSE the transport connection until
+    it has read the entire request, or until the client closes the connection.
+    Otherwise, the client might not reliably receive the response message.
+    However, this requirement is not be construed as preventing a server from
+    defending itself against denial-of-service attacks, or from badly broken
+    client implementations.
+    '''
+    try:
+        sock = environ.get('wsgi.input')
+        if sock.closed:
+            return
+        # Figure out how much content is available for us to consume.
+        expected = int(environ.get('CONTENT_LENGTH'))
+
+        # Try to receive all of the data. Keep retrying until we get an error
+        # which indicates that we can't retry. Eat errors. The client will just
+        # have to deal with a possible Broken Pipe -- we tried.
+        received = 0
+        while received < expected:
+            try:
+                received += len(sock.read(expected - received))
+            except socket.error as err:
+                if err.errno != errno.EAGAIN:
+                    break
+    except (KeyError, ValueError):
+        pass
+
+
 class KerberosAuthMiddleware(object):
     '''
     WSGI Middleware providing Kerberos Authentication
@@ -65,7 +104,7 @@ class KerberosAuthMiddleware(object):
             LOG.warn('KerberosAuthMiddleware: set KRB5_KTNAME to your keytab '
                      'file')
 
-    def _unauthorized(self, start_response, token=None):
+    def _unauthorized(self, environ, start_response, token=None):
         '''
         Send a 401 Unauthorized response
         '''
@@ -74,14 +113,16 @@ class KerberosAuthMiddleware(object):
             headers.append(('WWW-Authenticate', token))
         else:
             headers.append( ('WWW-Authenticate', 'Negotiate'))
+        _consume_request(environ)
         start_response('401 Unauthorized', headers)
         return [self.unauthorized[0]]
 
-    def _forbidden(self, start_response):
+    def _forbidden(self, environ, start_response):
         '''
         Send a 403 Forbidden response
         '''
         headers = [('content-type', self.forbidden[1])]
+        _consume_request(environ)
         start_response('403 Forbidden', headers)
         return [self.forbidden[0]]
 
@@ -111,6 +152,7 @@ class KerberosAuthMiddleware(object):
                 kerberos.authGSSServerClean(state)
         return server_token, user
 
+
     def __call__(self, environ, start_response):
         '''
         Authenticate the client, and on success invoke the WSGI application.
@@ -125,7 +167,7 @@ class KerberosAuthMiddleware(object):
         authorization = environ.get('HTTP_AUTHORIZATION')
         # If we have no 'Authorization' header, return a 401.
         if authorization is None:
-            return self._unauthorized(start_response)
+            return self._unauthorized(environ, start_response)
 
         # If we have an 'Authorization' header, extract the client's token and
         # attempt to authenticate with it.
