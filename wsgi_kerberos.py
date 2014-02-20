@@ -32,10 +32,10 @@ def _consume_request(environ):
     '''
     try:
         sock = environ.get('wsgi.input')
-        if sock.closed:
+        if hasattr(sock, 'closed') and sock.closed:
             return
         # Figure out how much content is available for us to consume.
-        expected = int(environ.get('CONTENT_LENGTH'))
+        expected = int(environ.get('CONTENT_LENGTH', '0'))
 
         # Try to receive all of the data. Keep retrying until we get an error
         # which indicates that we can't retry. Eat errors. The client will just
