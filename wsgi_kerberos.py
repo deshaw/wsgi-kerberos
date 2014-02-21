@@ -191,4 +191,4 @@ class KerberosAuthMiddleware(object):
             return self._unauthorized(start_response, server_token)
         else:
             # Otherwise, return a 403.
-            return self._forbidden(start_response)
+            return self._forbidden(environ, start_response)
