@@ -200,6 +200,11 @@ class KerberosAuthMiddleware(object):
                                                               server_token])))
                 return start_response(status, headers, exc_info)
             return self.application(environ, custom_start_response)
+        # If we get a a user, but no token, call the application but don't
+        # provide mutual authentication.
+        elif user:
+            environ['REMOTE_USER'] = user
+            return self.application(environ, start_response)
         elif server_token:
             # If we got a token, but no user, return a 401 with the token
             return self._unauthorized(environ, start_response, server_token)
