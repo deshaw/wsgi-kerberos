@@ -181,6 +181,11 @@ To see a simple example, you can download the code `from github
 Changes
 -------
 
+0.2.0
+`````
+
+-     bug fixes
+
 0.1.0
 `````
 

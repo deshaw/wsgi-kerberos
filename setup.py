@@ -16,7 +16,7 @@ Links
 from setuptools import setup
 
 setup(name='WSGI-Kerberos',
-      version='0.1.0',
+      version='0.2.0',
       url='http://github.com/mkomitee/wsgi-kerberos',
       license='BSD',
       author='Michael Komitee',
