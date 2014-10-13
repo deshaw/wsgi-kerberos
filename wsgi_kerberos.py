@@ -8,8 +8,12 @@ import logging
 import os
 import socket
 
+class NullHandler(logging.Handler):
+    def emit(self, record):
+        pass
+
 LOG = logging.getLogger(__name__)
-LOG.addHandler(logging.NullHandler())
+LOG.addHandler(NullHandler())
 
 
 def _consume_request(environ):
