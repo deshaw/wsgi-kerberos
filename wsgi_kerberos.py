@@ -3,13 +3,24 @@ WSGI Kerberos Authentication Middleware
 
 Add Kerberos/GSSAPI Negotiate Authentication support to any WSGI Application
 '''
+import errno
 import kerberos
 import logging
 import os
 import socket
+import sys
 
 LOG = logging.getLogger(__name__)
 LOG.addHandler(logging.NullHandler())
+
+PY3 = sys.version_info > (3,)
+if PY3:
+    basestring = (bytes, str)
+    unicode = str
+
+
+def ensure_bytestring(s):
+    return s.encode('utf-8') if isinstance(s, unicode) else s
 
 
 def _consume_request(environ):
@@ -73,14 +84,16 @@ class KerberosAuthMiddleware(object):
             hostname = socket.gethostname()
 
         if unauthorized is None:
-            unauthorized = ('Unauthorized', 'text/plain')
+            unauthorized = (b'Unauthorized', 'text/plain')
         elif isinstance(unauthorized, basestring):
             unauthorized = (unauthorized, 'text/plain')
+        unauthorized = (ensure_bytestring(unauthorized[0]), unauthorized[1])
 
         if forbidden is None:
-            forbidden = ('Forbidden', 'text/plain')
+            forbidden = (b'Forbidden', 'text/plain')
         elif isinstance(forbidden, basestring):
             forbidden = (forbidden, 'text/plain')
+        forbidden = (ensure_bytestring(forbidden[0]), forbidden[1])
 
         if auth_required_callback is None:
             auth_required_callback = lambda x: True
@@ -96,13 +109,11 @@ class KerberosAuthMiddleware(object):
                 principal = kerberos.getServerPrincipalDetails('HTTP',
                                                                hostname)
             except kerberos.KrbError as exc:
-                LOG.warn('KerberosAuthMiddleware: %s' % exc.message[0])
+                LOG.warning('KerberosAuthMiddleware: %s', exc)
             else:
-                LOG.debug('KerberosAuthMiddleware is identifying as %s' %
-                          principal)
+                LOG.debug('KerberosAuthMiddleware is identifying as %s', principal)
         else:
-            LOG.warn('KerberosAuthMiddleware: set KRB5_KTNAME to your keytab '
-                     'file')
+            LOG.warning('KerberosAuthMiddleware: set KRB5_KTNAME to your keytab file')
 
     def _unauthorized(self, environ, start_response, token=None):
         '''
@@ -112,7 +123,7 @@ class KerberosAuthMiddleware(object):
         if token:
             headers.append(('WWW-Authenticate', token))
         else:
-            headers.append( ('WWW-Authenticate', 'Negotiate'))
+            headers.append(('WWW-Authenticate', 'Negotiate'))
         _consume_request(environ)
         start_response('401 Unauthorized', headers)
         return [self.unauthorized[0]]
@@ -152,7 +163,6 @@ class KerberosAuthMiddleware(object):
                 kerberos.authGSSServerClean(state)
         return server_token, user
 
-
     def __call__(self, environ, start_response):
         '''
         Authenticate the client, and on success invoke the WSGI application.
@@ -181,6 +191,7 @@ class KerberosAuthMiddleware(object):
             # call the application, add the token to the response, and return
             # it
             environ['REMOTE_USER'] = user
+
             def custom_start_response(status, headers, exc_info=None):
                 headers.append(('WWW-Authenticate', ' '.join(['negotiate',
                                                               server_token])))

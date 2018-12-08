@@ -1,12 +1,14 @@
-from wsgi_kerberos import KerberosAuthMiddleware
+from wsgi_kerberos import KerberosAuthMiddleware, ensure_bytestring
 from webtest import TestApp
 import kerberos
 import mock
 import unittest
 
+
 def index(environ, start_response):
     start_response('200 OK', [('Content-Type', 'text/plain')])
-    return ['Hello %s' % environ.get('REMOTE_USER', 'ANONYMOUS')]
+    response_body = 'Hello %s' % environ.get('REMOTE_USER', 'ANONYMOUS')
+    return [ensure_bytestring(response_body)]
 
 
 class BasicAppTestCase(unittest.TestCase):
@@ -28,7 +30,7 @@ class BasicAppTestCase(unittest.TestCase):
         r = app.get('/', expect_errors=False)
         self.assertEqual(r.status, '200 OK')
         self.assertEqual(r.status_int, 200)
-        self.assertEqual(r.body, 'Hello ANONYMOUS')
+        self.assertEqual(r.body, b'Hello ANONYMOUS')
         self.assertEqual(r.headers.get('WWW-Authenticate'), None)
         self.assertEqual(r.headers['content-type'], 'text/plain')
 
@@ -51,7 +53,7 @@ class BasicAppTestCase(unittest.TestCase):
 
         self.assertEqual(r.status, '401 Unauthorized')
         self.assertEqual(r.status_int, 401)
-        self.assertEqual(r.body, 'Unauthorized')
+        self.assertEqual(r.body, b'Unauthorized')
         self.assertEqual(r.headers['www-authenticate'], 'Negotiate')
         self.assertEqual(r.headers['content-type'], 'text/plain')
 
@@ -71,7 +73,7 @@ class BasicAppTestCase(unittest.TestCase):
 
         self.assertEqual(r.status, '401 Unauthorized')
         self.assertEqual(r.status_int, 401)
-        self.assertEqual(r.body, 'CUSTOM')
+        self.assertEqual(r.body, b'CUSTOM')
         self.assertEqual(r.headers['www-authenticate'], 'Negotiate')
         self.assertEqual(r.headers['content-type'], 'text/plain')
 
@@ -92,7 +94,7 @@ class BasicAppTestCase(unittest.TestCase):
 
         self.assertEqual(r.status, '401 Unauthorized')
         self.assertEqual(r.status_int, 401)
-        self.assertEqual(r.body, 'CUSTOM')
+        self.assertEqual(r.body, b'CUSTOM')
         self.assertEqual(r.headers['www-authenticate'], 'Negotiate')
         self.assertEqual(r.headers['content-type'], 'text/html')
 
@@ -118,7 +120,7 @@ class BasicAppTestCase(unittest.TestCase):
 
         self.assertEqual(r.status, '200 OK')
         self.assertEqual(r.status_int, 200)
-        self.assertEqual(r.body, 'Hello user@EXAMPLE.ORG')
+        self.assertEqual(r.body, b'Hello user@EXAMPLE.ORG')
         self.assertEqual(r.headers['WWW-Authenticate'], 'negotiate STOKEN')
         self.assertEqual(r.headers['content-type'], 'text/plain')
 
@@ -149,7 +151,7 @@ class BasicAppTestCase(unittest.TestCase):
 
         self.assertEqual(r.status, '403 Forbidden')
         self.assertEqual(r.status_int, 403)
-        self.assertEqual(r.body, 'Forbidden')
+        self.assertEqual(r.body, b'Forbidden')
         self.assertEqual(r.headers['content-type'], 'text/plain')
 
         self.assertEqual(init.mock_calls, [mock.call('HTTP@example.org')])
@@ -182,7 +184,7 @@ class BasicAppTestCase(unittest.TestCase):
 
         self.assertEqual(r.status, '403 Forbidden')
         self.assertEqual(r.status_int, 403)
-        self.assertEqual(r.body, 'CUSTOM')
+        self.assertEqual(r.body, b'CUSTOM')
         self.assertEqual(r.headers['content-type'], 'text/plain')
 
         self.assertEqual(init.mock_calls, [mock.call('HTTP@example.org')])
@@ -216,7 +218,7 @@ class BasicAppTestCase(unittest.TestCase):
 
         self.assertEqual(r.status, '403 Forbidden')
         self.assertEqual(r.status_int, 403)
-        self.assertEqual(r.body, 'CUSTOM')
+        self.assertEqual(r.body, b'CUSTOM')
         self.assertEqual(r.headers['content-type'], 'text/html')
 
         self.assertEqual(init.mock_calls, [mock.call('HTTP@example.org')])
@@ -224,6 +226,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(name.mock_calls, [])
         self.assertEqual(response.mock_calls, [])
         self.assertEqual(clean.mock_calls, [mock.call(state)])
+
 
 if __name__ == '__main__':
     unittest.main()
