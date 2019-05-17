@@ -199,7 +199,7 @@ class KerberosAuthMiddleware(object):
             return self.application(environ, custom_start_response)
         elif server_token:
             # If we got a token, but no user, return a 401 with the token
-            return self._unauthorized(start_response, server_token)
+            return self._unauthorized(environ, start_response, server_token)
         else:
             # Otherwise, return a 403.
             return self._forbidden(environ, start_response)
