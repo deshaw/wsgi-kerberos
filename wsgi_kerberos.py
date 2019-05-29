@@ -76,6 +76,9 @@ class KerberosAuthMiddleware(object):
     :type unauthorized: str or tuple
     :param forbidden: 403 Response text or text/content-type tuple
     :type forbidden: str or tuple
+    :param auth_required_callback: predicate accepting the WSGI environ
+        for a request returning whether the request should be authenticated 
+    :type auth_required_callback: callable
     '''
 
     def __init__(self, app, hostname=None, unauthorized=None, forbidden=None,
