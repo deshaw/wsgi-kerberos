@@ -73,7 +73,8 @@ constructor::
         http.serve_forever()
 
 ``WSGI-Kerberos`` assumes that every request should be authenticated. If this is
-not the case, you can override it by passing in a callback named to the
+not the case, you can override it by passing in a callback named
+``auth_required_callback`` to the
 ``KerberosAuthMiddleware`` constructor. This callback will be called for every
 request and passed the wsgi environment object::
 
