@@ -159,7 +159,7 @@ class KerberosAuthMiddleware(object):
                     user = kerberos.authGSSServerUserName(state)
                 elif rc == kerberos.AUTH_GSS_CONTINUE:
                     server_token = kerberos.authGSSServerResponse(state)
-        except kerberos.GSSError:
+        except kerberos.KrbError:
             pass
         finally:
             if state:
