@@ -57,6 +57,22 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.headers['www-authenticate'], 'Negotiate')
         self.assertEqual(r.headers['content-type'], 'text/plain')
 
+    def test_unauthorized_when_missing_negotiate(self):
+        '''
+        Ensure that when the client sends an Authorization header that does
+        not start with "Negotiate ", they receive a 401 Unauthorized response
+        with a "WWW-Authenticate: Negotiate" header.
+        '''
+        app = TestApp(KerberosAuthMiddleware(index))
+
+        r = app.get('/', headers={'Authorization': 'foo'}, expect_errors=True)
+
+        self.assertEqual(r.status, '401 Unauthorized')
+        self.assertEqual(r.status_int, 401)
+        self.assertTrue(r.body.startswith(b'Unauthorized'))
+        self.assertEqual(r.headers['www-authenticate'], 'Negotiate')
+        self.assertEqual(r.headers['content-type'], 'text/plain')
+
     def test_unauthorized_custom(self):
         '''
         Ensure that when the client does not send an authorization token, they

@@ -77,7 +77,7 @@ class KerberosAuthMiddleware(object):
     :param forbidden: 403 Response text or text/content-type tuple
     :type forbidden: str or tuple
     :param auth_required_callback: predicate accepting the WSGI environ
-        for a request returning whether the request should be authenticated 
+        for a request returning whether the request should be authenticated
     :type auth_required_callback: callable
     '''
 
@@ -182,9 +182,12 @@ class KerberosAuthMiddleware(object):
         if authorization is None:
             return self._unauthorized(environ, start_response)
 
-        # If we have an 'Authorization' header, extract the client's token and
-        # attempt to authenticate with it.
-        client_token = ''.join(authorization.split()[1:])
+        # We have an 'Authorization' header -> should start with 'Negotiate '.
+        parsed = authorization.split(None, 1)
+        if len(parsed) < 2 or parsed[0].lower() != 'negotiate':
+            return self._unauthorized(environ, start_response)
+        # Extract the client's token and attempt to authenticate with it.
+        client_token = parsed[1]
         server_token, user = self._authenticate(client_token)
 
         # If we get a server_token and a user, call the application, add our
