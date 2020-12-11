@@ -182,6 +182,10 @@ To see a simple example, you can download the code `from github
 Changes
 -------
 
+1.0.0
+`````
+-    Update license from BSD-2-Clause to BSD-3-Clause
+
 0.2.0
 `````
 

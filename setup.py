@@ -16,9 +16,9 @@ Links
 from setuptools import setup
 
 setup(name='WSGI-Kerberos',
-      version='0.2.0',
+      version='1.0.0',
       url='http://github.com/mkomitee/wsgi-kerberos',
-      license='BSD',
+      license='BSD-3-Clause',
       author='Michael Komitee',
       author_email='mkomitee@gmail.com',
       description='Kerberos authentication support in WSGI Middleware',
