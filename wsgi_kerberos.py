@@ -159,8 +159,8 @@ class KerberosAuthMiddleware(object):
                     user = kerberos.authGSSServerUserName(state)
                 elif rc == kerberos.AUTH_GSS_CONTINUE:
                     server_token = kerberos.authGSSServerResponse(state)
-        except kerberos.KrbError:
-            pass
+        except kerberos.GSSError as exc:
+            LOG.error("Unhandled GSSError: %s", exc)
         finally:
             if state:
                 kerberos.authGSSServerClean(state)
