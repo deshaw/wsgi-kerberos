@@ -21,8 +21,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Install dependencies
-      run: sudo apt-get install -y krb5-user
+    - name: Install kerberos
+      run: sudo apt-get install -y krb5-user libkrb5-dev
     - name: Set up Python ${{ matrix.python-version }}
       uses: actions/setup-python@v2
       with:
