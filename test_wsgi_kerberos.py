@@ -24,9 +24,7 @@ class BasicAppTestCase(unittest.TestCase):
 
         '''
         false = lambda x: False
-        app = TestApp(KerberosAuthMiddleware(index,
-                                             hostname='example.org',
-                                             auth_required_callback=false))
+        app = TestApp(KerberosAuthMiddleware(index, auth_required_callback=false))
         r = app.get('/', expect_errors=False)
         self.assertEqual(r.status, '200 OK')
         self.assertEqual(r.status_int, 200)
@@ -47,7 +45,7 @@ class BasicAppTestCase(unittest.TestCase):
         header field which indicates the server supports Negotiate
         authentication.
         '''
-        app = TestApp(KerberosAuthMiddleware(index, hostname='example.org'))
+        app = TestApp(KerberosAuthMiddleware(index))
 
         r = app.get('/', expect_errors=True)
 
@@ -65,9 +63,7 @@ class BasicAppTestCase(unittest.TestCase):
         authentication. If configured, they should also receive customized
         content.
         '''
-        app = TestApp(KerberosAuthMiddleware(index,
-                                             hostname='example.org',
-                                             unauthorized='CUSTOM'))
+        app = TestApp(KerberosAuthMiddleware(index, unauthorized='CUSTOM'))
 
         r = app.get('/', expect_errors=True)
 
@@ -85,16 +81,13 @@ class BasicAppTestCase(unittest.TestCase):
         authentication. If configured, they should also receive customized
         content and content type.
         '''
-        app = TestApp(KerberosAuthMiddleware(index,
-                                             hostname='example.org',
-                                             unauthorized=('CUSTOM',
-                                                           'text/html')))
+        app = TestApp(KerberosAuthMiddleware(index, unauthorized=('401!', 'text/html')))
 
         r = app.get('/', expect_errors=True)
 
         self.assertEqual(r.status, '401 Unauthorized')
         self.assertEqual(r.status_int, 401)
-        self.assertEqual(r.body, b'CUSTOM')
+        self.assertEqual(r.body, b'401!')
         self.assertEqual(r.headers['www-authenticate'], 'Negotiate')
         self.assertEqual(r.headers['content-type'], 'text/html')
 
@@ -114,7 +107,7 @@ class BasicAppTestCase(unittest.TestCase):
         step.return_value = kerberos.AUTH_GSS_COMPLETE
         name.return_value = "user@EXAMPLE.ORG"
         response.return_value = "STOKEN"
-        app = TestApp(KerberosAuthMiddleware(index, hostname='example.org'))
+        app = TestApp(KerberosAuthMiddleware(index))
 
         r = app.get('/', headers={'Authorization': 'Negotiate CTOKEN'})
 
@@ -124,7 +117,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.headers['WWW-Authenticate'], 'negotiate STOKEN')
         self.assertEqual(r.headers['content-type'], 'text/plain')
 
-        self.assertEqual(init.mock_calls, [mock.call('HTTP@example.org')])
+        self.assertEqual(init.mock_calls, [mock.call('')])
         self.assertEqual(step.mock_calls, [mock.call(state, 'CTOKEN')])
         self.assertEqual(name.mock_calls, [mock.call(state)])
         self.assertEqual(response.mock_calls, [mock.call(state)])
@@ -143,7 +136,7 @@ class BasicAppTestCase(unittest.TestCase):
         state = object()
         init.return_value = (kerberos.AUTH_GSS_COMPLETE, state)
         step.side_effect = kerberos.GSSError("FAILURE")
-        app = TestApp(KerberosAuthMiddleware(index, hostname='example.org'))
+        app = TestApp(KerberosAuthMiddleware(index))
 
         r = app.get('/',
                     headers={'Authorization': 'Negotiate CTOKEN'},
@@ -154,7 +147,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.body, b'Forbidden')
         self.assertEqual(r.headers['content-type'], 'text/plain')
 
-        self.assertEqual(init.mock_calls, [mock.call('HTTP@example.org')])
+        self.assertEqual(init.mock_calls, [mock.call('')])
         self.assertEqual(step.mock_calls, [mock.call(state, 'CTOKEN')])
         self.assertEqual(name.mock_calls, [])
         self.assertEqual(response.mock_calls, [])
@@ -174,9 +167,7 @@ class BasicAppTestCase(unittest.TestCase):
         state = object()
         init.return_value = (kerberos.AUTH_GSS_COMPLETE, state)
         step.side_effect = kerberos.GSSError("FAILURE")
-        app = TestApp(KerberosAuthMiddleware(index,
-                                             hostname='example.org',
-                                             forbidden='CUSTOM'))
+        app = TestApp(KerberosAuthMiddleware(index, forbidden='CUSTOM'))
 
         r = app.get('/',
                     headers={'Authorization': 'Negotiate CTOKEN'},
@@ -187,7 +178,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.body, b'CUSTOM')
         self.assertEqual(r.headers['content-type'], 'text/plain')
 
-        self.assertEqual(init.mock_calls, [mock.call('HTTP@example.org')])
+        self.assertEqual(init.mock_calls, [mock.call('')])
         self.assertEqual(step.mock_calls, [mock.call(state, 'CTOKEN')])
         self.assertEqual(name.mock_calls, [])
         self.assertEqual(response.mock_calls, [])
@@ -207,10 +198,7 @@ class BasicAppTestCase(unittest.TestCase):
         state = object()
         init.return_value = (kerberos.AUTH_GSS_COMPLETE, state)
         step.side_effect = kerberos.GSSError("FAILURE")
-        app = TestApp(KerberosAuthMiddleware(index,
-                                             hostname='example.org',
-                                             forbidden=('CUSTOM',
-                                                        'text/html')))
+        app = TestApp(KerberosAuthMiddleware(index, forbidden=('CUSTOM', 'text/html')))
 
         r = app.get('/',
                     headers={'Authorization': 'Negotiate CTOKEN'},
@@ -221,7 +209,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.body, b'CUSTOM')
         self.assertEqual(r.headers['content-type'], 'text/html')
 
-        self.assertEqual(init.mock_calls, [mock.call('HTTP@example.org')])
+        self.assertEqual(init.mock_calls, [mock.call('')])
         self.assertEqual(step.mock_calls, [mock.call(state, 'CTOKEN')])
         self.assertEqual(name.mock_calls, [])
         self.assertEqual(response.mock_calls, [])
