@@ -169,19 +169,30 @@ class KerberosAuthMiddleware(object):
         Include a token in the response headers that can be used to
         authenticate the server to the client.
         '''
-        # If we don't need to authenticate the request, shortcut the whole
-        # process.
-        if not self.auth_required_callback(environ):
+        # If we don't need to authenticate the request, don't immediately
+        # bypass authentication, but rather just remember this for now.
+        # This way, if auth is not required, but the client provides valid
+        # auth anyway, we still tell the application who made the request.
+        auth_required = self.auth_required_callback(environ)
+
+        def _40x_resp_if_auth_required(error_resp, **kw):
+            if auth_required:
+                return error_resp(environ, start_response, **kw)
             return self.application(environ, start_response)
 
         authorization = environ.get('HTTP_AUTHORIZATION')
-        # If we have no 'Authorization' header, return a 401.
+        # If we have no 'Authorization' header...
         if authorization is None:
-            return self._unauthorized(environ, start_response)
+            return _40x_resp_if_auth_required(self._unauthorized)
 
-        # If we have an 'Authorization' header, extract the client's token and
-        # attempt to authenticate with it.
-        client_token = ''.join(authorization.split()[1:])
+        # We have an Authorization header -> should start with "negotiate".
+        parsed = authorization.split(None, 1)
+        if len(parsed) < 2 or parsed[0].lower() != 'negotiate':
+            LOG.debug("Authorization header did not start with 'negotiate'")
+            return _40x_resp_if_auth_required(self._unauthorized)
+
+        # Extract the client's token and attempt to authenticate with it.
+        client_token = parsed[1]
         server_token, user = self._authenticate(client_token)
 
         # If we get a server_token and a user, call the application, add our
@@ -204,7 +215,8 @@ class KerberosAuthMiddleware(object):
             return self.application(environ, start_response)
         elif server_token:
             # If we got a token, but no user, return a 401 with the token
-            return self._unauthorized(environ, start_response, server_token)
+            return _40x_resp_if_auth_required(
+                self._unauthorized, token=server_token)
         else:
             # Otherwise, return a 403.
-            return self._forbidden(environ, start_response)
+            return _40x_resp_if_auth_required(self._forbidden)
