@@ -1,9 +1,11 @@
 #!/usr/bin/env python
+import sys
 
 def example(environ, start_response):
     user = environ.get('REMOTE_USER', 'ANONYMOUS')
     start_response('200 OK', [('Content-Type', 'text/plain')])
-    return ["Hello, %s" % user]
+    data = "Hello {}".format(user)
+    return [data.encode()]
 
 if __name__ == '__main__':
     from wsgiref.simple_server import make_server
