@@ -6,7 +6,6 @@ Add Kerberos/GSSAPI Negotiate Authentication support to any WSGI Application
 import errno
 import kerberos
 import logging
-import os
 import socket
 import sys
 
@@ -66,26 +65,27 @@ class KerberosAuthMiddleware(object):
     '''
     WSGI Middleware providing Kerberos Authentication
 
-    If no hostname is provided, the name returned by socket.gethostname() will
-    be used.
-
     :param app: WSGI Application
-    :param hostname: Hostname for kerberos name canonicalization
+    :param hostname: Force the server to only accept requests for the specified
+        hostname. If not specified, clients can access the service by any name
+        in the keytab.
     :type hostname: str
     :param unauthorized: 401 Response text or text/content-type tuple
     :type unauthorized: str or tuple
     :param forbidden: 403 Response text or text/content-type tuple
     :type forbidden: str or tuple
     :param auth_required_callback: predicate accepting the WSGI environ
-        for a request returning whether the request should be authenticated 
+        for a request returning whether the request should be authenticated
     :type auth_required_callback: callable
     '''
 
-    def __init__(self, app, hostname=None, unauthorized=None, forbidden=None,
+    def __init__(self, app, hostname='', unauthorized=None, forbidden=None,
                  auth_required_callback=None):
-        if hostname is None:
-            hostname = socket.gethostname()
-
+        if hostname:
+            self._check_hostname(hostname)
+            self.service = 'HTTP@%s' % hostname
+        else:
+            self.service = ''
         if unauthorized is None:
             unauthorized = (b'Unauthorized', 'text/plain')
         elif isinstance(unauthorized, basestring):
@@ -102,21 +102,18 @@ class KerberosAuthMiddleware(object):
             auth_required_callback = lambda x: True
 
         self.application = app               # WSGI Application
-        self.service = 'HTTP@%s' % hostname  # GSS Service
         self.unauthorized = unauthorized     # 401 response text/content-type
         self.forbidden = forbidden           # 403 response text/content-type
         self.auth_required_callback = auth_required_callback
 
-        if 'KRB5_KTNAME' in os.environ:
-            try:
-                principal = kerberos.getServerPrincipalDetails('HTTP',
-                                                               hostname)
-            except kerberos.KrbError as exc:
-                LOG.warning('KerberosAuthMiddleware: %s', exc)
-            else:
-                LOG.debug('KerberosAuthMiddleware is identifying as %s', principal)
+    @staticmethod
+    def _check_hostname(hostname):
+        try:
+            principal = kerberos.getServerPrincipalDetails('HTTP', hostname)
+        except kerberos.KrbError as exc:
+            LOG.warning('kerberos.getServerPrincipalDetails("HTTP", %r) raised %s', hostname, exc)
         else:
-            LOG.warning('KerberosAuthMiddleware: set KRB5_KTNAME to your keytab file')
+            LOG.debug('KerberosAuthMiddleware is identifying as %s', principal)
 
     def _unauthorized(self, environ, start_response, token=None):
         '''
