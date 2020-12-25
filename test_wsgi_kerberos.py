@@ -1,5 +1,5 @@
-from wsgi_kerberos import KerberosAuthMiddleware, ensure_bytestring
-from webtest import TestApp
+from wsgi_kerberos import KerberosAuthMiddleware, ensure_bytestring, _DEFAULT_READ_MAX
+from webtest import TestApp, TestRequest
 import kerberos
 import mock
 import unittest
@@ -119,6 +119,23 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.body, b'Unauthorized')
         self.assertEqual(r.headers['www-authenticate'], 'Negotiate')
         self.assertEqual(r.headers['content-type'], 'text/plain')
+
+    def test_read_max_on_auth_fail(self):
+        '''
+        KerberosAuthMiddleware's ``read_max_on_auth_fail`` should allow
+        customizing reading of request bodies of unauthenticated requests.
+        '''
+        body = b'body of unauthenticated request'
+        for read_max in (0, 5, 100, _DEFAULT_READ_MAX, float('inf')):
+            # When we drop Py2, we can use `with self.subTest(read_max=read_max):` here.
+            app = TestApp(KerberosAuthMiddleware(index, read_max_on_auth_fail=read_max))
+            req = TestRequest.blank('/', method='POST', body=body)
+            resp = app.do_request(req, status=401)
+            if read_max < len(body):
+                expect_read = 0
+            else:
+                expect_read = min(read_max, len(body))
+            self.assertEqual(req.body_file.input.tell(), expect_read)
 
     def test_unauthorized_when_missing_negotiate(self):
         '''
