@@ -178,7 +178,7 @@ To see a simple example, you can download the code `from github
 Changes
 -------
 
-1.0.0 (Unreleased)
+1.0.0 (2020-12-28)
 ``````````````````
 -    `hostname` no longer needs to be specified in KerberosAuthMiddleware
      constructor - any hostname in the keytab will be accepted
