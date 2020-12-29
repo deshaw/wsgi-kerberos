@@ -4,8 +4,7 @@ WSGI-Kerberos
 WSGI-Kerberos is `WSGI`_ Middleware which implements `Kerberos`_ authentication.
 It makes it easy to add Kerberos authentication to any WSGI application.
 
-Its only dependency is `python-kerberos`_ and it's been tested against version
-1.1.1.
+Its only dependency is `python-kerberos`_ and it's been tested up to version 1.3.0
 
 You can install the requirements from PyPI with ``easy_install`` or ``pip`` or
 download them by hand.
@@ -19,11 +18,7 @@ The official copy of this documentation is available at `Read the Docs`_.
 Installation
 ------------
 
-Install the extension with one of the following commands::
-
-    $ easy_install WSGI-Kerberos
-
-or alternatively if you have ``pip`` installed::
+Install the extension with pip:
 
     $ pip install WSGI-Kerberos
 
@@ -31,8 +26,8 @@ How to Use
 ----------
 
 To integrate ``WSGI-Kerberos`` into your application you'll need to generate
-your keytab set the environment variable ``KRB5_KTNAME`` in your shell to the
-location of the keytab file.
+your keytab and set the environment variable ``KRB5_KTNAME`` in your shell to
+the location of the keytab file.
 
 After that, it should be as easy as passing your application to the
 ``KerberosAuthMiddleware`` constructor.  All requests destined for the
@@ -47,30 +42,13 @@ For example::
 
     def example(environ, start_response):
         start_response('200 OK', [('Content-Type', 'text/plain')])
-        return ['Hello, %s' % environ['REMOTE_USER']]
+        return ['Hello, {}'.format(environ['REMOTE_USER']).encode()]
 
     if __name__ == '__main__':
         app = KerberosAuthMiddleware(example)
-        http = make_server('', 80, app)
+        http = make_server('', 8080, app)
         http.serve_forever()
 
-
-``WSGI-Kerberos`` assumes that the service will be running using the hostname of
-the host on which the application is run. If this is not the case, you can
-override it by passing in a hostname to the ``KerberosAuthMiddleware``
-constructor::
-
-    from wsgiref.simple_server import make_server
-    from wsgi_kerberos import KerberosAuthMiddleware
-
-    def example(environ, start_response):
-        start_response('200 OK', [('Content-Type', 'text/plain')])
-        return ['Hello, %s' % environ['REMOTE_USER']]
-
-    if __name__ == '__main__':
-        app = KerberosAuthMiddleware(example, hostname='example.com')
-        http = make_server('', 80, app)
-        http.serve_forever()
 
 ``WSGI-Kerberos`` assumes that every request should be authenticated. If this is
 not the case, you can override it by passing in a callback named
@@ -83,7 +61,7 @@ request and passed the wsgi environment object::
 
     def example(environ, start_response):
         start_response('200 OK', [('Content-Type', 'text/plain')])
-        return ['Hello, %s' % environ.get('REMOTE_USER', 'ANONYMOUS')]
+        return ['Hello, {}'.format(environ.get('REMOTE_USER', 'ANONYMOUS').encode()]
 
     def authenticate(environ):
         return environ['PATH_INFO'].startswith('/protected'):
@@ -91,7 +69,7 @@ request and passed the wsgi environment object::
     if __name__ == '__main__':
         app = KerberosAuthMiddleware(example,
                                      auth_required_callback=authenticate)
-        http = make_server('', 80, app)
+        http = make_server('', 8080, app)
         http.serve_forever()
 
 
@@ -110,13 +88,13 @@ These can be customized::
 
     def example(environ, start_response):
         start_response('200 OK', [('Content-Type', 'text/plain')])
-        return ['Hello, %s' % environ['REMOTE_USER']]
+        return ['Hello, {}'.format(environ['REMOTE_USER']).encode()]
 
     if __name__ == '__main__':
         app = KerberosAuthMiddleware(example,
                                      unauthorized='Authentication Required',
                                      forbidden='Authentication Failed')
-        http = make_server('', 80, app)
+        http = make_server('', 8080, app)
         http.serve_forever()
 
 You can also change the ``Content-Types`` by passing in string/content-type
@@ -127,7 +105,7 @@ tuples::
 
     def example(environ, start_response):
         start_response('200 OK', [('Content-Type', 'text/plain')])
-        return ['Hello, %s' % environ['REMOTE_USER']]
+        return ['Hello, {}'.format(environ['REMOTE_USER']).encode()]
 
     if __name__ == '__main__':
         forbidden='''
@@ -149,7 +127,25 @@ tuples::
         app = KerberosAuthMiddleware(example,
                                      unauthorized=(unauthorized, 'text/html'),
                                      forbidden=(forbidden, 'text/plain'))
-        http = make_server('', 80, app)
+        http = make_server('', 8080, app)
+        http.serve_forever()
+
+
+
+``WSGI-Kerberos`` will authenticate the request using any hostname in the
+keytab file. You can restrict requests to one specific hostname by passing it
+to the ``KerberosAuthMiddleware`` constructor::
+
+    from wsgiref.simple_server import make_server
+    from wsgi_kerberos import KerberosAuthMiddleware
+
+    def example(environ, start_response):
+        start_response('200 OK', [('Content-Type', 'text/plain')])
+        return ['Hello, {}'.format(environ['REMOTE_USER']).encode()]
+
+    if __name__ == '__main__':
+        app = KerberosAuthMiddleware(example, hostname='example.com')
+        http = make_server('', 8080, app)
         http.serve_forever()
 
 
@@ -177,14 +173,26 @@ Full Example
 ------------
 
 To see a simple example, you can download the code `from github
-<http://github.com/mkomitee/wsgi-kerberos>`_. It is in the example directory.
+<http://github.com/deshaw/wsgi-kerberos>`_. It is in the example directory.
 
 Changes
 -------
 
-1.0.0
-`````
+1.0.0 (2020-12-28)
+``````````````````
+-    `hostname` no longer needs to be specified in KerberosAuthMiddleware
+     constructor - any hostname in the keytab will be accepted
+-    Set REMOTE_USER when valid auth is provided, even if not required
+-    Limit the number of bytes read in request bodies on auth failure to
+     mitigate a possible DoS attack. New parameter `read_max_on_auth_fail`
+     can be set to customize or remove the limit
+-    Support clients which don't request mutual authentication
+-    Log Kerberos errors
+-    Validate first word in Authorization header
+-    Python 3 compatibility fixes
+-    Various bug fixes
 -    Update license from BSD-2-Clause to BSD-3-Clause
+-    Project was moved to the D. E. Shaw Org
 
 0.2.0
 `````

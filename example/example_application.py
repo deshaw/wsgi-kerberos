@@ -1,5 +1,8 @@
 #!/usr/bin/env python
-import sys
+import logging
+from wsgi_kerberos import KerberosAuthMiddleware
+from wsgiref.simple_server import make_server
+
 
 def example(environ, start_response):
     user = environ.get('REMOTE_USER', 'ANONYMOUS')
@@ -7,12 +10,11 @@ def example(environ, start_response):
     data = "Hello {}".format(user)
     return [data.encode()]
 
+
+application = KerberosAuthMiddleware(example)
+
+
 if __name__ == '__main__':
-    from wsgiref.simple_server import make_server
-    from wsgi_kerberos import KerberosAuthMiddleware
-    from socket import gethostname
-    import logging
     logging.basicConfig(level=logging.DEBUG)
-    application = KerberosAuthMiddleware(example)
-    server = make_server(gethostname(), 8080, application)
+    server = make_server('', 8080, application)
     server.serve_forever()

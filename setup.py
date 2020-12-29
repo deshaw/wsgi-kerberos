@@ -9,18 +9,26 @@ Links
 
 * `documentation <https://wsgi-kerberos.readthedocs.org/en/latest/>`_
 * `development version
-  <http://github.com/mkomitee/wsgi-kerberos/zipball/master#egg=wsgi-kerberos-dev>`_
+  <http://github.com/deshaw/wsgi-kerberos/zipball/master#egg=wsgi-kerberos-dev>`_
 
 """
 
+import os
+import re
 from setuptools import setup
 
+lib = os.path.join(os.path.dirname(__file__), "wsgi_kerberos.py")
+with open(lib) as fh:
+    version = re.search(r"""__version__ = ["'](.*?)["']""", fh.read()).group(1)
+
 setup(name='WSGI-Kerberos',
-      version='1.0.0',
-      url='http://github.com/mkomitee/wsgi-kerberos',
+      version=version,
+      url='https://github.com/deshaw/wsgi-kerberos',
       license='BSD-3-Clause',
       author='Michael Komitee',
       author_email='mkomitee@gmail.com',
+      maintainer='Vitaly Shupak',
+      maintainer_email='vitaly.shupak@deshaw.com',
       description='Kerberos authentication support in WSGI Middleware',
       long_description=__doc__,
       py_modules=['wsgi_kerberos'],
