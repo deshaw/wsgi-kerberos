@@ -24,66 +24,6 @@ def ensure_bytestring(s):
     return s.encode('utf-8') if isinstance(s, unicode) else s
 
 
-# 10 << 20 (10 MB) is the maxFormSize value that go uses. Ref:
-# https://github.com/golang/go/blob/bc7e4d9/src/net/http/request.go#L1204
-_DEFAULT_READ_MAX = 10 << 20
-
-
-def _consume_request(environ, read_max):
-    '''
-    Consume and discard up to *read_max* bytes of the request.
-
-    This avoids problems that some clients have when they get an unexpected
-    and premature close from the server.
-
-    RFC2616: If an origin server receives a request that does not include an
-    Expect request-header field with the "100-continue" expectation, the
-    request includes a request body, and the server responds with a final
-    status code before reading the entire request body from the transport
-    connection, then the server SHOULD NOT CLOSE the transport connection until
-    it has read the entire request, or until the client closes the connection.
-    Otherwise, the client might not reliably receive the response message.
-    However, this requirement is not be construed as preventing a server from
-    defending itself against denial-of-service attacks, or from badly broken
-    client implementations.
-    '''
-    if read_max == 0:  # Short-circuit early when user opts out of this.
-        return
-    if environ.get("HTTP_EXPECT") == "100-continue":
-        return
-    try:
-        sock = environ.get('wsgi.input')
-        if hasattr(sock, 'closed') and sock.closed:
-            return
-
-        content_length = environ.get('CONTENT_LENGTH', '')
-        if not content_length:
-            remaining = read_max
-        else:
-            content_length = int(content_length)
-            if content_length > read_max:
-                # User is not willing to read such a large request body, but
-                # reading anything less does not help naively-written clients.
-                return
-            remaining = content_length
-
-        # Try to receive all of the data. Keep retrying until we get an error
-        # which indicates that we can't retry. Eat errors. The client will just
-        # have to deal with a possible Broken Pipe -- we tried.
-        while remaining > 0:
-            try:
-                delta = len(sock.read(remaining))
-            except socket.error as err:
-                if err.errno != errno.EAGAIN:
-                    break
-            else:
-                if delta == 0:
-                    break
-                remaining -= delta
-    except Exception as exc:
-        LOG.debug("_consume_request suppressed: %s", exc)
-
-
 class KerberosAuthMiddleware(object):
     '''
     WSGI Middleware providing Kerberos Authentication
@@ -100,19 +40,9 @@ class KerberosAuthMiddleware(object):
     :param auth_required_callback: predicate accepting the WSGI environ
         for a request returning whether the request should be authenticated
     :type auth_required_callback: callable
-    :param read_max_on_auth_fail: When a request could not be authenticated,
-        read and discard up to this many bytes of the request. This may help
-        naively- written clients that send large request bodies which they
-        expect to be consumed before first confirming that the request was
-        authenticated successfully. Pass 0 to disable this if you don't want to
-        waste resources to potentially accommodate such clients. Pass math.inf
-        to read an unlimited number of bytes. Beware that the more the server
-        is willing to read, the more vulnerable it becomes to denial-of-service
-        attacks.
-    :type read_max_on_auth_fail: int
     '''
     def __init__(self, app, hostname='', unauthorized=None, forbidden=None,
-                 auth_required_callback=None, read_max_on_auth_fail=_DEFAULT_READ_MAX):
+                 auth_required_callback=None):
         if hostname:
             self._check_hostname(hostname)
             self.service = 'HTTP@%s' % hostname
@@ -137,7 +67,6 @@ class KerberosAuthMiddleware(object):
         self.unauthorized = unauthorized     # 401 response text/content-type
         self.forbidden = forbidden           # 403 response text/content-type
         self.auth_required_callback = auth_required_callback
-        self.read_max_on_auth_fail = read_max_on_auth_fail
 
     @staticmethod
     def _check_hostname(hostname):
@@ -157,7 +86,6 @@ class KerberosAuthMiddleware(object):
             headers.append(('WWW-Authenticate', token))
         else:
             headers.append(('WWW-Authenticate', 'Negotiate'))
-        _consume_request(environ, self.read_max_on_auth_fail)
         start_response('401 Unauthorized', headers)
         return [self.unauthorized[0]]
 
@@ -166,7 +94,6 @@ class KerberosAuthMiddleware(object):
         Send a 403 Forbidden response
         '''
         headers = [('content-type', self.forbidden[1])]
-        _consume_request(environ, self.read_max_on_auth_fail)
         start_response('403 Forbidden', headers)
         return [self.forbidden[0]]
 
