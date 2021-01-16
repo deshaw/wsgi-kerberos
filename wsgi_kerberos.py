@@ -24,17 +24,24 @@ def ensure_bytestring(s):
     return s.encode('utf-8') if isinstance(s, unicode) else s
 
 
-# 10 << 20 (10 MB) is the maxFormSize value that go uses. Ref:
-# https://github.com/golang/go/blob/bc7e4d9/src/net/http/request.go#L1204
-_DEFAULT_READ_MAX = 10 << 20
+_DEFAULT_READ_MAX = int(1e8)  # 100 MB
+_CHUNK_SIZE = 1024 * 64       # Match Werkzeug: https://git.io/JtTiR
+
+# Quoting https://specs.openstack.org/openstack/api-wg/guidelines/http/methods.html:
+# HTTP request bodies are theoretically allowed for all methods except TRACE,
+# however they are not commonly used except in PUT, POST and PATCH. Because of
+# this, they may not be supported properly by some client frameworks, and you
+# should not allow request bodies for GET, DELETE, TRACE, OPTIONS and HEAD methods.
+_NEVER_READ_METHODS = frozenset({'GET', 'DELETE', 'TRACE', 'OPTIONS', 'HEAD'})
 
 
-def _consume_request(environ, read_max):
+def _consume_request(environ, read_max, chunk_size=_CHUNK_SIZE):
     '''
     Consume and discard up to *read_max* bytes of the request.
 
-    This avoids problems that some clients have when they get an unexpected
-    and premature close from the server.
+    This avoids problems that some clients have when the server does not
+    download the entire request body before sending the response, such as
+    for requests that could not be authenticated.
 
     RFC2616: If an origin server receives a request that does not include an
     Expect request-header field with the "100-continue" expectation, the
@@ -49,37 +56,47 @@ def _consume_request(environ, read_max):
     '''
     if read_max == 0:  # Short-circuit early when user opts out of this.
         return
+    if environ["REQUEST_METHOD"] in _NEVER_READ_METHODS:
+        return
     if environ.get("HTTP_EXPECT") == "100-continue":
         return
     try:
-        sock = environ.get('wsgi.input')
-        if hasattr(sock, 'closed') and sock.closed:
+        body = environ.get('wsgi.input')
+        if hasattr(body, 'closed') and body.closed:
             return
 
         content_length = environ.get('CONTENT_LENGTH', '')
         if not content_length:
-            remaining = read_max
-        else:
-            content_length = int(content_length)
-            if content_length > read_max:
-                # User is not willing to read such a large request body, but
-                # reading anything less does not help naively-written clients.
-                return
-            remaining = content_length
-
+            LOG.debug("No Content-Length -> skipping _consume_request")
+            return
+        content_length = int(content_length)
+        if content_length > read_max:
+            # Server is not willing to read such a large request body, but
+            # reading anything less does not help naively-written clients.
+            LOG.warning(
+                "Content-Length (%s) exceeds read_max (%s) -> not consuming"
+                " request body; client may get a connection error. Enabling"
+                " preemptive authentication on the client may avoid this."
+                " You can also pass a higher value of `read_max_on_auth_fail`"
+                " to KerberosAuthMiddleware.",
+                content_length, read_max
+            )
+            return
         # Try to receive all of the data. Keep retrying until we get an error
         # which indicates that we can't retry. Eat errors. The client will just
         # have to deal with a possible Broken Pipe -- we tried.
+        remaining = content_length
         while remaining > 0:
+            to_read = min(chunk_size, remaining)
             try:
-                delta = len(sock.read(remaining))
+                read = len(body.read(to_read))
             except socket.error as err:
                 if err.errno != errno.EAGAIN:
-                    break
+                    raise
             else:
-                if delta == 0:
+                if read != to_read:
                     break
-                remaining -= delta
+                remaining -= read
     except Exception as exc:
         LOG.debug("_consume_request suppressed: %s", exc)
 
@@ -102,10 +119,10 @@ class KerberosAuthMiddleware(object):
     :type auth_required_callback: callable
     :param read_max_on_auth_fail: When a request could not be authenticated,
         read and discard up to this many bytes of the request. This may help
-        naively- written clients that send large request bodies which they
+        naively-written clients that send large request bodies which they
         expect to be consumed before first confirming that the request was
         authenticated successfully. Pass 0 to disable this if you don't want to
-        waste resources to potentially accommodate such clients. Pass math.inf
+        waste resources to potentially accommodate such clients. Pass float('inf')
         to read an unlimited number of bytes. Beware that the more the server
         is willing to read, the more vulnerable it becomes to denial-of-service
         attacks.
