@@ -178,6 +178,15 @@ To see a simple example, you can download the code `from github
 Changes
 -------
 
+1.0.1 (not yet released)
+````````````````````````
+
+-   Fix an issue introduced in v1.0.0 that could cause the server to hang
+    after receiving a request with no body that could not be authenticated.
+-   When a request could not be authenticated, WSGI-Kerberos now buffers no
+    more than 64K of the request at a time before sending the response.
+-   Increase the default `read_max_on_auth_fail` from 10 MB to 100 MB.
+
 1.0.0 (2020-12-28)
 ``````````````````
 -    `hostname` no longer needs to be specified in KerberosAuthMiddleware
@@ -185,7 +194,16 @@ Changes
 -    Set REMOTE_USER when valid auth is provided, even if not required
 -    Limit the number of bytes read in request bodies on auth failure to
      mitigate a possible DoS attack. New parameter `read_max_on_auth_fail`
-     can be set to customize or remove the limit
+     can be set to customize or remove the limit.
+     **NOTE:** This can cause some clients, for example
+     requests/requests_kerberos, to get connection errors, due to naively
+     uploading arbitrarily large request bodies that they expect the server
+     to read entirely, including when the request omitted credentials,
+     before checking for an authentication failure response.
+     Such clients may set `force_preemptive=True` (or equivalent) to try to
+     avoid getting connection errors.
+     To disable the DoS protection completely,
+     pass WSGI-Kerberos `read_max_on_auth_fail=float("inf")`.
 -    Support clients which don't request mutual authentication
 -    Log Kerberos errors
 -    Validate first word in Authorization header
