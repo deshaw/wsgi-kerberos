@@ -178,8 +178,8 @@ To see a simple example, you can download the code `from github
 Changes
 -------
 
-1.0.1 (not yet released)
-````````````````````````
+1.0.1 (2021-01-18)
+``````````````````
 
 -   Fix an issue introduced in v1.0.0 that could cause the server to hang
     after receiving a request with no body that could not be authenticated.
