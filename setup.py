@@ -49,5 +49,5 @@ setup(name='WSGI-Kerberos',
                    'Topic :: Internet :: WWW/HTTP :: WSGI',
                    'Topic :: Internet :: WWW/HTTP :: WSGI :: Middleware',
                    'Topic :: Software Development :: Libraries :: Python Modules'],
-      test_suite='test_wsgi_kerberos',
+      test_suite='tests',
       tests_require=['mock', 'WebTest'])
