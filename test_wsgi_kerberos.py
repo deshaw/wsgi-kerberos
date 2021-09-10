@@ -31,6 +31,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.body, b'Hello ANONYMOUS')
         self.assertEqual(r.headers.get('WWW-Authenticate'), None)
         self.assertEqual(r.headers['content-type'], 'text/plain')
+        self.assertEqual(r.headers['content-length'], '15')
 
         self.assertEqual(init.mock_calls, [])
         self.assertEqual(step.mock_calls, [])
@@ -63,6 +64,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.body, b'Hello ANONYMOUS')
         self.assertEqual(r.headers.get('WWW-Authenticate'), None)
         self.assertEqual(r.headers['content-type'], 'text/plain')
+        self.assertEqual(r.headers['content-length'], '15')
 
         self.assertEqual(init.mock_calls, [mock.call('HTTP@example.org')])
         self.assertEqual(step.mock_calls, [mock.call(state, 'CTOKEN')])
@@ -96,6 +98,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.body, b'Hello user@EXAMPLE.ORG')
         self.assertEqual(r.headers.get('WWW-Authenticate'), 'negotiate STOKEN')
         self.assertEqual(r.headers['content-type'], 'text/plain')
+        self.assertEqual(r.headers['content-length'], '22')
 
         self.assertEqual(init.mock_calls, [mock.call('HTTP@example.org')])
         self.assertEqual(step.mock_calls, [mock.call(state, 'CTOKEN')])
@@ -119,6 +122,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.body, b'Unauthorized')
         self.assertEqual(r.headers['www-authenticate'], 'Negotiate')
         self.assertEqual(r.headers['content-type'], 'text/plain')
+        self.assertEqual(r.headers['content-length'], '12')
 
     def test_read_max_on_auth_fail(self):
         '''
@@ -152,6 +156,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertTrue(r.body.startswith(b'Unauthorized'))
         self.assertEqual(r.headers['www-authenticate'], 'Negotiate')
         self.assertEqual(r.headers['content-type'], 'text/plain')
+        self.assertEqual(r.headers['content-length'], '12')
 
     def test_unauthorized_custom(self):
         '''
@@ -170,6 +175,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.body, b'CUSTOM')
         self.assertEqual(r.headers['www-authenticate'], 'Negotiate')
         self.assertEqual(r.headers['content-type'], 'text/plain')
+        self.assertEqual(r.headers['content-length'], '6')
 
     def test_unauthorized_custom_content_type(self):
         '''
@@ -188,6 +194,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.body, b'401!')
         self.assertEqual(r.headers['www-authenticate'], 'Negotiate')
         self.assertEqual(r.headers['content-type'], 'text/html')
+        self.assertEqual(r.headers['content-length'], '4')
 
     @mock.patch('kerberos.authGSSServerInit')
     @mock.patch('kerberos.authGSSServerStep')
@@ -214,6 +221,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.body, b'Hello user@EXAMPLE.ORG')
         self.assertEqual(r.headers['WWW-Authenticate'], 'negotiate STOKEN')
         self.assertEqual(r.headers['content-type'], 'text/plain')
+        self.assertEqual(r.headers['content-length'], '22')
 
         self.assertEqual(init.mock_calls, [mock.call('')])
         self.assertEqual(step.mock_calls, [mock.call(state, 'CTOKEN')])
@@ -244,6 +252,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.status_int, 403)
         self.assertEqual(r.body, b'Forbidden')
         self.assertEqual(r.headers['content-type'], 'text/plain')
+        self.assertEqual(r.headers['content-length'], '9')
 
         self.assertEqual(init.mock_calls, [mock.call('')])
         self.assertEqual(step.mock_calls, [mock.call(state, 'CTOKEN')])
@@ -275,6 +284,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.status_int, 403)
         self.assertEqual(r.body, b'CUSTOM')
         self.assertEqual(r.headers['content-type'], 'text/plain')
+        self.assertEqual(r.headers['content-length'], '6')
 
         self.assertEqual(init.mock_calls, [mock.call('')])
         self.assertEqual(step.mock_calls, [mock.call(state, 'CTOKEN')])
@@ -306,6 +316,7 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.status_int, 403)
         self.assertEqual(r.body, b'CUSTOM')
         self.assertEqual(r.headers['content-type'], 'text/html')
+        self.assertEqual(r.headers['content-length'], '6')
 
         self.assertEqual(init.mock_calls, [mock.call('')])
         self.assertEqual(step.mock_calls, [mock.call(state, 'CTOKEN')])
