@@ -30,8 +30,6 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.status_int, 200)
         self.assertEqual(r.body, b'Hello ANONYMOUS')
         self.assertEqual(r.headers.get('WWW-Authenticate'), None)
-        self.assertEqual(r.headers['content-type'], 'text/plain')
-        self.assertEqual(r.headers['content-length'], str(len(r.body)))
 
         self.assertEqual(init.mock_calls, [])
         self.assertEqual(step.mock_calls, [])
@@ -63,8 +61,6 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.status_int, 200)
         self.assertEqual(r.body, b'Hello ANONYMOUS')
         self.assertEqual(r.headers.get('WWW-Authenticate'), None)
-        self.assertEqual(r.headers['content-type'], 'text/plain')
-        self.assertEqual(r.headers['content-length'], str(len(r.body)))
 
         self.assertEqual(init.mock_calls, [mock.call('HTTP@example.org')])
         self.assertEqual(step.mock_calls, [mock.call(state, 'CTOKEN')])
@@ -97,8 +93,6 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.status_int, 200)
         self.assertEqual(r.body, b'Hello user@EXAMPLE.ORG')
         self.assertEqual(r.headers.get('WWW-Authenticate'), 'negotiate STOKEN')
-        self.assertEqual(r.headers['content-type'], 'text/plain')
-        self.assertEqual(r.headers['content-length'], str(len(r.body)))
 
         self.assertEqual(init.mock_calls, [mock.call('HTTP@example.org')])
         self.assertEqual(step.mock_calls, [mock.call(state, 'CTOKEN')])
@@ -220,8 +214,6 @@ class BasicAppTestCase(unittest.TestCase):
         self.assertEqual(r.status_int, 200)
         self.assertEqual(r.body, b'Hello user@EXAMPLE.ORG')
         self.assertEqual(r.headers['WWW-Authenticate'], 'negotiate STOKEN')
-        self.assertEqual(r.headers['content-type'], 'text/plain')
-        self.assertEqual(r.headers['content-length'], str(len(r.body)))
 
         self.assertEqual(init.mock_calls, [mock.call('')])
         self.assertEqual(step.mock_calls, [mock.call(state, 'CTOKEN')])
