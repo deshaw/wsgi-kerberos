@@ -178,6 +178,11 @@ To see a simple example, you can download the code `from github
 Changes
 -------
 
+1.0.2 (2021-09-24)
+``````````````````
+
+-   Set content-length header on 401/403 responses.
+
 1.0.1 (2021-01-18)
 ``````````````````
 
