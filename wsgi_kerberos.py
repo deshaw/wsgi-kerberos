@@ -169,7 +169,10 @@ class KerberosAuthMiddleware(object):
         '''
         Send a 401 Unauthorized response
         '''
-        headers = [('content-type', self.unauthorized[1])]
+        headers = [
+            ('content-type', self.unauthorized[1]),
+            ('content-length', str(len(self.unauthorized[0])))
+        ]
         if token:
             headers.append(('WWW-Authenticate', token))
         else:
@@ -182,7 +185,10 @@ class KerberosAuthMiddleware(object):
         '''
         Send a 403 Forbidden response
         '''
-        headers = [('content-type', self.forbidden[1])]
+        headers = [
+            ('content-type', self.forbidden[1]),
+            ('content-length', str(len(self.forbidden[0])))
+        ]
         _consume_request(environ, self.read_max_on_auth_fail)
         start_response('403 Forbidden', headers)
         return [self.forbidden[0]]
