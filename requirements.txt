@@ -1,1 +1,1 @@
-kerberos < 2
+kerberos
