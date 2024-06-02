@@ -3,29 +3,15 @@ WSGI Kerberos Authentication Middleware
 
 Add Kerberos/GSSAPI Negotiate Authentication support to any WSGI Application
 '''
+import base64
 import errno
-import kerberos
 import logging
-import socket
-import sys
 
-__version__ = '1.0.2'
-
-LOG = logging.getLogger(__name__)
-LOG.addHandler(logging.NullHandler())
-
-PY3 = sys.version_info > (3,)
-if PY3:
-    basestring = (bytes, str)
-    unicode = str
-
-
-def ensure_bytestring(s):
-    return s.encode('utf-8') if isinstance(s, unicode) else s
-
+import gssapi
 
 _DEFAULT_READ_MAX = int(1e8)  # 100 MB
 _CHUNK_SIZE = 1024 * 64       # Match Werkzeug: https://git.io/JtTiR
+_LOG = logging.getLogger(__name__)
 
 # Quoting https://specs.openstack.org/openstack/api-wg/guidelines/http/methods.html:
 # HTTP request bodies are theoretically allowed for all methods except TRACE,
@@ -35,73 +21,7 @@ _CHUNK_SIZE = 1024 * 64       # Match Werkzeug: https://git.io/JtTiR
 _NEVER_READ_METHODS = frozenset({'GET', 'DELETE', 'TRACE', 'OPTIONS', 'HEAD'})
 
 
-def _consume_request(environ, read_max, chunk_size=_CHUNK_SIZE):
-    '''
-    Consume and discard up to *read_max* bytes of the request.
-
-    This avoids problems that some clients have when the server does not
-    download the entire request body before sending the response, such as
-    for requests that could not be authenticated.
-
-    RFC2616: If an origin server receives a request that does not include an
-    Expect request-header field with the "100-continue" expectation, the
-    request includes a request body, and the server responds with a final
-    status code before reading the entire request body from the transport
-    connection, then the server SHOULD NOT CLOSE the transport connection until
-    it has read the entire request, or until the client closes the connection.
-    Otherwise, the client might not reliably receive the response message.
-    However, this requirement is not be construed as preventing a server from
-    defending itself against denial-of-service attacks, or from badly broken
-    client implementations.
-    '''
-    if read_max == 0:  # Short-circuit early when user opts out of this.
-        return
-    if environ["REQUEST_METHOD"] in _NEVER_READ_METHODS:
-        return
-    if environ.get("HTTP_EXPECT") == "100-continue":
-        return
-    try:
-        body = environ.get('wsgi.input')
-        if hasattr(body, 'closed') and body.closed:
-            return
-
-        content_length = environ.get('CONTENT_LENGTH', '')
-        if not content_length:
-            LOG.debug("No Content-Length -> skipping _consume_request")
-            return
-        content_length = int(content_length)
-        if content_length > read_max:
-            # Server is not willing to read such a large request body, but
-            # reading anything less does not help naively-written clients.
-            LOG.warning(
-                "Content-Length (%s) exceeds read_max (%s) -> not consuming"
-                " request body; client may get a connection error. Enabling"
-                " preemptive authentication on the client may avoid this."
-                " You can also pass a higher value of `read_max_on_auth_fail`"
-                " to KerberosAuthMiddleware.",
-                content_length, read_max
-            )
-            return
-        # Try to receive all of the data. Keep retrying until we get an error
-        # which indicates that we can't retry. Eat errors. The client will just
-        # have to deal with a possible Broken Pipe -- we tried.
-        remaining = content_length
-        while remaining > 0:
-            to_read = min(chunk_size, remaining)
-            try:
-                read = len(body.read(to_read))
-            except socket.error as err:
-                if err.errno != errno.EAGAIN:
-                    raise
-            else:
-                if read != to_read:
-                    break
-                remaining -= read
-    except Exception as exc:
-        LOG.debug("_consume_request suppressed: %s", exc)
-
-
-class KerberosAuthMiddleware(object):
+class KerberosAuthMiddleware:
     '''
     WSGI Middleware providing Kerberos Authentication
 
@@ -111,9 +31,9 @@ class KerberosAuthMiddleware(object):
         in the keytab.
     :type hostname: str
     :param unauthorized: 401 Response text or text/content-type tuple
-    :type unauthorized: str or tuple
+    :type unauthorized: tuple
     :param forbidden: 403 Response text or text/content-type tuple
-    :type forbidden: str or tuple
+    :type forbidden: tuple
     :param auth_required_callback: predicate accepting the WSGI environ
         for a request returning whether the request should be authenticated
     :type auth_required_callback: callable
@@ -127,57 +47,47 @@ class KerberosAuthMiddleware(object):
         is willing to read, the more vulnerable it becomes to denial-of-service
         attacks.
     :type read_max_on_auth_fail: int
+    :param logger: logging provider
+    :type logger: logging.Logger
     '''
-    def __init__(self, app, hostname='', unauthorized=None, forbidden=None,
-                 auth_required_callback=None, read_max_on_auth_fail=_DEFAULT_READ_MAX):
-        if hostname:
-            self._check_hostname(hostname)
-            self.service = 'HTTP@%s' % hostname
-        else:
-            self.service = ''
-        if unauthorized is None:
-            unauthorized = (b'Unauthorized', 'text/plain')
-        elif isinstance(unauthorized, basestring):
-            unauthorized = (unauthorized, 'text/plain')
-        unauthorized = (ensure_bytestring(unauthorized[0]), unauthorized[1])
 
-        if forbidden is None:
-            forbidden = (b'Forbidden', 'text/plain')
-        elif isinstance(forbidden, basestring):
-            forbidden = (forbidden, 'text/plain')
-        forbidden = (ensure_bytestring(forbidden[0]), forbidden[1])
-
-        if auth_required_callback is None:
-            auth_required_callback = lambda x: True
-
+    def __init__(
+        self,
+        app,
+        hostname='',
+        unauthorized=(b"Unauthorized", "text/plain"),
+        forbidden=(b"Forbidden", "text/plain"),
+        auth_required_callback=lambda _: True,
+        read_max_on_auth_fail=_DEFAULT_READ_MAX,
+        logger=_LOG,
+    ):
         self.application = app               # WSGI Application
         self.unauthorized = unauthorized     # 401 response text/content-type
         self.forbidden = forbidden           # 403 response text/content-type
         self.auth_required_callback = auth_required_callback
         self.read_max_on_auth_fail = read_max_on_auth_fail
+        self.logger = logger
 
-    @staticmethod
-    def _check_hostname(hostname):
-        try:
-            principal = kerberos.getServerPrincipalDetails('HTTP', hostname)
-        except kerberos.KrbError as exc:
-            LOG.warning('kerberos.getServerPrincipalDetails("HTTP", %r) raised %s', hostname, exc)
-        else:
-            LOG.debug('KerberosAuthMiddleware is identifying as %s', principal)
+        self.service = None
+        if hostname:
+            try:
+                # TODO: support different GSSAPI backends other than Kerberos
+                self.service = gssapi.Name(f"HTTP/{hostname}@").canonicalize(gssapi.MechType.kerberos)
+            except gssapi.GSSError as exc:
+                self.logger.warning('Failed to create GSSAPI service credential name "HTTP/%s@" for Kerberos mechanism: %s', hostname, exc)
+            else:
+                self.logger.info('KerberosAuthMiddleware is identifying as %s', self.service)
 
-    def _unauthorized(self, environ, start_response, token=None):
+    def _unauthorized(self, environ, start_response, token='Negotiate'):
         '''
         Send a 401 Unauthorized response
         '''
         headers = [
             ('content-type', self.unauthorized[1]),
-            ('content-length', str(len(self.unauthorized[0])))
+            ('content-length', str(len(self.unauthorized[0]))),
+            ('WWW-Authenticate', token),
         ]
-        if token:
-            headers.append(('WWW-Authenticate', token))
-        else:
-            headers.append(('WWW-Authenticate', 'Negotiate'))
-        _consume_request(environ, self.read_max_on_auth_fail)
+        self._consume_request(environ)
         start_response('401 Unauthorized', headers)
         return [self.unauthorized[0]]
 
@@ -189,7 +99,7 @@ class KerberosAuthMiddleware(object):
             ('content-type', self.forbidden[1]),
             ('content-length', str(len(self.forbidden[0])))
         ]
-        _consume_request(environ, self.read_max_on_auth_fail)
+        self._consume_request(environ)
         start_response('403 Forbidden', headers)
         return [self.forbidden[0]]
 
@@ -200,24 +110,103 @@ class KerberosAuthMiddleware(object):
         Return the authenticated users principal and a token suitable to
         provide mutual authentication to the client.
         '''
-        state = None
-        server_token = None
-        user = None
+
+        # TODO: re-acquire credentials only when the credentials expire instead of every request
         try:
-            rc, state = kerberos.authGSSServerInit(self.service)
-            if rc == kerberos.AUTH_GSS_COMPLETE:
-                rc = kerberos.authGSSServerStep(state, client_token)
-                if rc == kerberos.AUTH_GSS_COMPLETE:
-                    server_token = kerberos.authGSSServerResponse(state)
-                    user = kerberos.authGSSServerUserName(state)
-                elif rc == kerberos.AUTH_GSS_CONTINUE:
-                    server_token = kerberos.authGSSServerResponse(state)
-        except kerberos.GSSError as exc:
-            LOG.error("Unhandled GSSError: %s", exc)
-        finally:
-            if state:
-                kerberos.authGSSServerClean(state)
+            gssapi_creds = gssapi.Credentials(usage="accept", name=self.service)
+        except Exception:
+            self.logger.exception(
+                "GSSAPI error: Failed to obtain kerberos credentials from the system keytab!"
+            )
+            return None, None
+
+        try:
+            gssapi_ctx = gssapi.SecurityContext(creds=gssapi_creds, usage="accept")
+        except Exception:
+            self.logger.exception(
+                "GSSAPI error: Failed to create a GSSAPI security context for the given kerberos credentials!"
+            )
+            return None, None
+
+        try:
+            gssapi_token = gssapi_ctx.step(base64.b64decode(client_token, validate=True))
+        except Exception:
+            self.logger.exception(
+                "GSSAPI error: Failed to perform GSSAPI negotation!"
+            )
+            return None, None
+
+        server_token = base64.b64encode(gssapi_token).decode()
+        user = str(gssapi_ctx.initiator_name)
         return server_token, user
+
+    def _consume_request(self, environ, chunk_size=_CHUNK_SIZE):
+        """
+        Consume and discard up to *read_max_on_auth_fail* bytes of the request.
+
+        This avoids problems that some clients have when the server does not
+        download the entire request body before sending the response, such as
+        for requests that could not be authenticated.
+
+        RFC2616: If an origin server receives a request that does not include an
+        Expect request-header field with the "100-continue" expectation, the
+        request includes a request body, and the server responds with a final
+        status code before reading the entire request body from the transport
+        connection, then the server SHOULD NOT CLOSE the transport connection until
+        it has read the entire request, or until the client closes the connection.
+        Otherwise, the client might not reliably receive the response message.
+        However, this requirement is not be construed as preventing a server from
+        defending itself against denial-of-service attacks, or from badly broken
+        client implementations.
+        """
+        if (
+            self.read_max_on_auth_fail == 0
+        ):  # Short-circuit early when user opts out of this.
+            return
+        if environ["REQUEST_METHOD"] in _NEVER_READ_METHODS:
+            return
+        if environ.get("HTTP_EXPECT") == "100-continue":
+            return
+        try:
+            body = environ.get("wsgi.input")
+            if hasattr(body, "closed") and body.closed:
+                return
+
+            content_length = environ.get("CONTENT_LENGTH", "")
+            if not content_length:
+                self.logger.info("No Content-Length -> skipping _consume_request")
+                return
+            content_length = int(content_length)
+            if content_length > self.read_max_on_auth_fail:
+                # Server is not willing to read such a large request body, but
+                # reading anything less does not help naively-written clients.
+                self.logger.warning(
+                    "Content-Length (%d) exceeds read_max_on_auth_fail (%s) -> not consuming"
+                    " request body; client may get a connection error. Enabling"
+                    " preemptive authentication on the client may avoid this."
+                    " You can also pass a higher value of `read_max_on_auth_fail`"
+                    " to KerberosAuthMiddleware.",
+                    content_length,
+                    self.read_max_on_auth_fail,
+                )
+                return
+            # Try to receive all of the data. Keep retrying until we get an error
+            # which indicates that we can't retry. Eat errors. The client will just
+            # have to deal with a possible Broken Pipe -- we tried.
+            remaining = content_length
+            while remaining > 0:
+                to_read = min(chunk_size, remaining)
+                try:
+                    read = len(body.read(to_read))
+                except OSError as err:
+                    if err.errno != errno.EAGAIN:
+                        raise
+                else:
+                    if read != to_read:
+                        break
+                    remaining -= read
+        except Exception as exc:
+            self.logger.info("_consume_request suppressed: %s", exc)
 
     def __call__(self, environ, start_response):
         '''
@@ -244,7 +233,7 @@ class KerberosAuthMiddleware(object):
         # We have an Authorization header -> should start with "negotiate".
         parsed = authorization.split(None, 1)
         if len(parsed) < 2 or parsed[0].lower() != 'negotiate':
-            LOG.debug("Authorization header did not start with 'negotiate'")
+            self.logger.info("Authorization header did not start with 'negotiate'")
             return _40x_resp_if_auth_required(self._unauthorized)
 
         # Extract the client's token and attempt to authenticate with it.
@@ -260,8 +249,7 @@ class KerberosAuthMiddleware(object):
             environ['REMOTE_USER'] = user
 
             def custom_start_response(status, headers, exc_info=None):
-                headers.append(('WWW-Authenticate', ' '.join(['negotiate',
-                                                              server_token])))
+                headers.append(('WWW-Authenticate', 'Negotiate ' + server_token))
                 return start_response(status, headers, exc_info)
             return self.application(environ, custom_start_response)
         # If we get a a user, but no token, call the application but don't
@@ -272,7 +260,7 @@ class KerberosAuthMiddleware(object):
         elif server_token:
             # If we got a token, but no user, return a 401 with the token
             return _40x_resp_if_auth_required(
-                self._unauthorized, token=server_token)
+                self._unauthorized, token="Negotiate " + server_token)
         else:
             # Otherwise, return a 403.
             return _40x_resp_if_auth_required(self._forbidden)

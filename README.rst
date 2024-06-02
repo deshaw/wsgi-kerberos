@@ -4,7 +4,7 @@ WSGI-Kerberos
 WSGI-Kerberos is `WSGI`_ Middleware which implements `Kerberos`_ authentication.
 It makes it easy to add Kerberos authentication to any WSGI application.
 
-Its only dependency is `python-kerberos`_ and it's been tested up to version 1.3.0
+Its only dependency is `gssapi`_ and it's been tested with v1.8.3 onwards.
 
 You can install the requirements from PyPI with ``easy_install`` or ``pip`` or
 download them by hand.
