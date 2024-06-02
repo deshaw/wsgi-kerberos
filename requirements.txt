@@ -1,1 +1,1 @@
-kerberos
+gssapi>=1.8.3
